@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a9103c94-community-waste-api",
     "name": "Community Waste Collection API",
-    "description": "API Pengumpulan Sampah Komunitas untuk PT. Green Energi Utama.\nDibangun menggunakan Go, Fiber v2, PostgreSQL, dan sqlc.",
+    "description": "API Community Waste Collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
