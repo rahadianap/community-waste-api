@@ -16,7 +16,7 @@ import (
 func NewPostgresPool(ctx context.Context, connString string) (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse database config: %w", err)
+		return nil, fmt.Errorf("gagal memuat konfigurasi database: %w", err)
 	}
 
 	config.MaxConns = 25
@@ -26,18 +26,17 @@ func NewPostgresPool(ctx context.Context, connString string) (*pgxpool.Pool, err
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create connection pool: %w", err)
+		return nil, fmt.Errorf("gagal membuat koneksi database: %w", err)
 	}
 
-	// Verify connection
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err := pool.Ping(pingCtx); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+		return nil, fmt.Errorf("gagal ping database: %w", err)
 	}
 
-	log.Println("Database connection pool established successfully")
+	log.Println("Database connection pool berhasil dibuat")
 	return pool, nil
 }
 
@@ -45,14 +44,14 @@ func RunMigrations(connString string, migrationsPath string) error {
 	sourceURL := fmt.Sprintf("file://%s", migrationsPath)
 	m, err := migrate.New(sourceURL, connString)
 	if err != nil {
-		return fmt.Errorf("failed to initialize migration: %w", err)
+		return fmt.Errorf("gagal menginisialisasi database migration: %w", err)
 	}
 	defer m.Close()
 
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("failed to run migrations: %w", err)
+		return fmt.Errorf("gagal menjalankan database migration: %w", err)
 	}
 
-	log.Println("Database migrations applied successfully")
+	log.Println("Database migrations berhasil dijalankan")
 	return nil
 }

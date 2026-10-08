@@ -12,11 +12,10 @@ WHERE id = $1;
 
 -- name: ListHouseholds :many
 SELECT * FROM households
-ORDER BY created_at DESC
-LIMIT $1 OFFSET $2;
-
--- name: CountHouseholds :one
-SELECT COUNT(*) FROM households;
+WHERE sqlc.narg('cursor_created_at')::timestamptz IS NULL
+    OR (created_at, id) < (sqlc.narg('cursor_created_at')::timestamptz, sqlc.narg('cursor_id')::uuid)
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg('limit');
 
 -- name: DeleteHousehold :exec
 DELETE FROM households

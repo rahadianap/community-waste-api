@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rahadianap/community-waste-api/internal/domain"
 	"github.com/rahadianap/community-waste-api/internal/repository"
@@ -24,7 +23,7 @@ func NewReportService(store repository.Store) ReportService {
 func (s *reportService) GetWasteSummary(ctx context.Context) ([]domain.WasteSummaryItem, error) {
 	rows, err := s.store.GetWasteSummaryReport(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get waste summary report: %w", err)
+		return nil, wrap(err, "gagal memuat data waste summary report")
 	}
 
 	items := make([]domain.WasteSummaryItem, len(rows))
@@ -42,7 +41,7 @@ func (s *reportService) GetWasteSummary(ctx context.Context) ([]domain.WasteSumm
 func (s *reportService) GetPaymentSummary(ctx context.Context) (*domain.PaymentSummaryReport, error) {
 	rows, err := s.store.GetPaymentSummaryReport(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get payment summary report: %w", err)
+		return nil, wrap(err, "gagal memuat data payment summary report")
 	}
 
 	byStatus := make([]domain.PaymentStatusSummary, len(rows))
@@ -56,7 +55,7 @@ func (s *reportService) GetPaymentSummary(ctx context.Context) (*domain.PaymentS
 
 	totalRevNumeric, err := s.store.GetTotalRevenue(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get total revenue: %w", err)
+		return nil, wrap(err, "gagal mendapatkan total revenue")
 	}
 
 	report := &domain.PaymentSummaryReport{

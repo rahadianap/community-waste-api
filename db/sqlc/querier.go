@@ -12,11 +12,8 @@ import (
 
 type Querier interface {
 	ConfirmPayment(ctx context.Context, arg ConfirmPaymentParams) (Payment, error)
-	CountHouseholds(ctx context.Context) (int64, error)
-	CountPayments(ctx context.Context, arg CountPaymentsParams) (int64, error)
 	// Kritis untuk validasi Aturan Bisnis BR-01
 	CountPendingPaymentsByHouseholdID(ctx context.Context, householdID pgtype.UUID) (int64, error)
-	CountPickups(ctx context.Context, arg CountPickupsParams) (int64, error)
 	CreateHousehold(ctx context.Context, arg CreateHouseholdParams) (Household, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreatePickup(ctx context.Context, arg CreatePickupParams) (WastePickup, error)

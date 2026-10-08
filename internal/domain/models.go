@@ -11,8 +11,6 @@ import (
 	db "github.com/rahadianap/community-waste-api/db/sqlc"
 )
 
-// --- Household DTOs ---
-
 type CreateHouseholdRequest struct {
 	OwnerName string `json:"owner_name"`
 	Address   string `json:"address"`
@@ -46,8 +44,6 @@ func ToHouseholdResponse(h db.Household) HouseholdResponse {
 	}
 }
 
-// --- Waste Pickup DTOs ---
-
 type CreatePickupRequest struct {
 	HouseholdID string `json:"household_id"`
 	Type        string `json:"type"`
@@ -59,7 +55,7 @@ func (r *CreatePickupRequest) Validate() error {
 		return fmt.Errorf("household_id is required")
 	}
 	if _, err := uuid.Parse(r.HouseholdID); err != nil {
-		return fmt.Errorf("invalid household_id uuid format")
+		return fmt.Errorf("invalid uuid format")
 	}
 
 	validTypes := map[string]bool{
@@ -69,7 +65,7 @@ func (r *CreatePickupRequest) Validate() error {
 		"electronic": true,
 	}
 	if !validTypes[strings.ToLower(r.Type)] {
-		return fmt.Errorf("invalid type: must be organic, plastic, paper, or electronic")
+		return fmt.Errorf("invalid jenis: must be organic, plastic, paper, or electronic")
 	}
 	return nil
 }
@@ -87,7 +83,7 @@ func (r *SchedulePickupRequest) Validate() (time.Time, error) {
 		// Also try layout "2006-01-02 15:04:05"
 		t, err = time.Parse("2006-01-02 15:04:05", r.PickupDate)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("invalid pickup_date format, expected RFC3339 (e.g. 2026-10-15T09:00:00Z)")
+			return time.Time{}, fmt.Errorf("invalid pickup_date format")
 		}
 	}
 	return t, nil
@@ -122,8 +118,6 @@ func ToPickupResponse(p db.WastePickup) PickupResponse {
 	}
 }
 
-// --- Payment DTOs ---
-
 type CreatePaymentRequest struct {
 	HouseholdID string  `json:"household_id"`
 	WasteID     string  `json:"waste_id"`
@@ -138,7 +132,7 @@ func (r *CreatePaymentRequest) Validate() error {
 		return fmt.Errorf("invalid waste_id uuid format")
 	}
 	if r.Amount <= 0 {
-		return fmt.Errorf("amount must be greater than 0")
+		return fmt.Errorf("amount harus lebih dari 0")
 	}
 	return nil
 }
@@ -179,8 +173,6 @@ func ToPaymentResponse(p db.Payment) PaymentResponse {
 	}
 }
 
-// --- Reports DTOs ---
-
 type WasteSummaryItem struct {
 	Type   string `json:"type"`
 	Status string `json:"status"`
@@ -197,8 +189,6 @@ type PaymentSummaryReport struct {
 	ByStatus     []PaymentStatusSummary `json:"by_status"`
 	TotalRevenue float64                `json:"total_revenue"`
 }
-
-// --- Helper Conversion Functions ---
 
 func UUIDToString(u pgtype.UUID) string {
 	if !u.Valid {

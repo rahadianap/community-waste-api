@@ -11,25 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countPickups = `-- name: CountPickups :one
-SELECT COUNT(*) FROM waste_pickups
-WHERE 
-    ($1::pickup_status IS NULL OR status = $1) AND
-    ($2::uuid IS NULL OR household_id = $2)
-`
-
-type CountPickupsParams struct {
-	Status      NullPickupStatus `json:"status"`
-	HouseholdID pgtype.UUID      `json:"household_id"`
-}
-
-func (q *Queries) CountPickups(ctx context.Context, arg CountPickupsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countPickups, arg.Status, arg.HouseholdID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createPickup = `-- name: CreatePickup :one
 INSERT INTO waste_pickups (
     household_id,
@@ -88,23 +69,27 @@ const listPickups = `-- name: ListPickups :many
 SELECT id, household_id, type, status, pickup_date, safety_check, created_at, updated_at FROM waste_pickups
 WHERE 
     ($1::pickup_status IS NULL OR status = $1) AND
-    ($2::uuid IS NULL OR household_id = $2)
-ORDER BY created_at DESC
-LIMIT $4 OFFSET $3
+    ($2::uuid IS NULL OR household_id = $2) AND
+    ($3::timestamptz IS NULL OR
+        (created_at, id) < ($3::timestamptz, $4::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT $5
 `
 
 type ListPickupsParams struct {
-	Status      NullPickupStatus `json:"status"`
-	HouseholdID pgtype.UUID      `json:"household_id"`
-	Offset      int32            `json:"offset"`
-	Limit       int32            `json:"limit"`
+	Status          NullPickupStatus   `json:"status"`
+	HouseholdID     pgtype.UUID        `json:"household_id"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        pgtype.UUID        `json:"cursor_id"`
+	Limit           int32              `json:"limit"`
 }
 
 func (q *Queries) ListPickups(ctx context.Context, arg ListPickupsParams) ([]WastePickup, error) {
 	rows, err := q.db.Query(ctx, listPickups,
 		arg.Status,
 		arg.HouseholdID,
-		arg.Offset,
+		arg.CursorCreatedAt,
+		arg.CursorID,
 		arg.Limit,
 	)
 	if err != nil {

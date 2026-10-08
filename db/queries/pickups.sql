@@ -16,15 +16,11 @@ WHERE id = $1;
 SELECT * FROM waste_pickups
 WHERE 
     (sqlc.narg('status')::pickup_status IS NULL OR status = sqlc.narg('status')) AND
-    (sqlc.narg('household_id')::uuid IS NULL OR household_id = sqlc.narg('household_id'))
-ORDER BY created_at DESC
-LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
-
--- name: CountPickups :one
-SELECT COUNT(*) FROM waste_pickups
-WHERE 
-    (sqlc.narg('status')::pickup_status IS NULL OR status = sqlc.narg('status')) AND
-    (sqlc.narg('household_id')::uuid IS NULL OR household_id = sqlc.narg('household_id'));
+    (sqlc.narg('household_id')::uuid IS NULL OR household_id = sqlc.narg('household_id')) AND
+    (sqlc.narg('cursor_created_at')::timestamptz IS NULL OR
+        (created_at, id) < (sqlc.narg('cursor_created_at')::timestamptz, sqlc.narg('cursor_id')::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg('limit');
 
 -- name: UpdatePickupSchedule :one
 UPDATE waste_pickups

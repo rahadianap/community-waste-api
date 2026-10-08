@@ -23,17 +23,11 @@ WHERE
     (sqlc.narg('status')::payment_status IS NULL OR status = sqlc.narg('status')) AND
     (sqlc.narg('household_id')::uuid IS NULL OR household_id = sqlc.narg('household_id')) AND
     (sqlc.narg('start_date')::timestamptz IS NULL OR created_at >= sqlc.narg('start_date')) AND
-    (sqlc.narg('end_date')::timestamptz IS NULL OR created_at <= sqlc.narg('end_date'))
-ORDER BY created_at DESC
-LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
-
--- name: CountPayments :one
-SELECT COUNT(*) FROM payments
-WHERE 
-    (sqlc.narg('status')::payment_status IS NULL OR status = sqlc.narg('status')) AND
-    (sqlc.narg('household_id')::uuid IS NULL OR household_id = sqlc.narg('household_id')) AND
-    (sqlc.narg('start_date')::timestamptz IS NULL OR created_at >= sqlc.narg('start_date')) AND
-    (sqlc.narg('end_date')::timestamptz IS NULL OR created_at <= sqlc.narg('end_date'));
+    (sqlc.narg('end_date')::timestamptz IS NULL OR created_at <= sqlc.narg('end_date')) AND
+    (sqlc.narg('cursor_created_at')::timestamptz IS NULL OR
+        (created_at, id) < (sqlc.narg('cursor_created_at')::timestamptz, sqlc.narg('cursor_id')::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg('limit');
 
 -- name: ConfirmPayment :one
 UPDATE payments

@@ -2,21 +2,17 @@ package service
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"math"
 
-	"github.com/jackc/pgx/v5"
 	db "github.com/rahadianap/community-waste-api/db/sqlc"
 	"github.com/rahadianap/community-waste-api/internal/domain"
 	"github.com/rahadianap/community-waste-api/internal/repository"
-	"github.com/rahadianap/community-waste-api/pkg/response"
+	"github.com/rahadianap/community-waste-api/internal/response"
 )
 
 type HouseholdService interface {
 	Create(ctx context.Context, req domain.CreateHouseholdRequest) (*domain.HouseholdResponse, error)
 	GetByID(ctx context.Context, id string) (*domain.HouseholdResponse, error)
-	List(ctx context.Context, page, limit int) ([]domain.HouseholdResponse, *response.Meta, error)
+	List(ctx context.Context, cursorStr string, limit int) ([]domain.HouseholdResponse, *response.Meta, error)
 	Delete(ctx context.Context, id string) error
 }
 
@@ -30,7 +26,7 @@ func NewHouseholdService(store repository.Store) HouseholdService {
 
 func (s *householdService) Create(ctx context.Context, req domain.CreateHouseholdRequest) (*domain.HouseholdResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, err
+		return nil, invalidInput(err)
 	}
 
 	household, err := s.store.CreateHousehold(ctx, db.CreateHouseholdParams{
@@ -38,7 +34,7 @@ func (s *householdService) Create(ctx context.Context, req domain.CreateHousehol
 		Address:   req.Address,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create household: %w", err)
+		return nil, wrap(err, "gagal membuat data household")
 	}
 
 	res := domain.ToHouseholdResponse(household)
@@ -48,41 +44,37 @@ func (s *householdService) Create(ctx context.Context, req domain.CreateHousehol
 func (s *householdService) GetByID(ctx context.Context, id string) (*domain.HouseholdResponse, error) {
 	pgUUID, err := domain.StringToUUID(id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid uuid: %w", err)
+		return nil, invalidInputf("invalid uuid: %v", err)
 	}
 
 	household, err := s.store.GetHouseholdByID(ctx, pgUUID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrHouseholdNotFound
-		}
-		return nil, fmt.Errorf("failed to get household: %w", err)
+		return nil, lookup(err, domain.ErrHouseholdNotFound, "gagal mengambil data household")
 	}
 
 	res := domain.ToHouseholdResponse(household)
 	return &res, nil
 }
 
-func (s *householdService) List(ctx context.Context, page, limit int) ([]domain.HouseholdResponse, *response.Meta, error) {
-	if page < 1 {
-		page = 1
+func (s *householdService) List(ctx context.Context, cursorStr string, limit int) ([]domain.HouseholdResponse, *response.Meta, error) {
+	limit = normalizeLimit(limit)
+	cursorCreatedAt, cursorID, err := decodeCursor(cursorStr)
+	if err != nil {
+		return nil, nil, err
 	}
-	if limit < 1 {
-		limit = 10
-	}
-	offset := (page - 1) * limit
 
 	households, err := s.store.ListHouseholds(ctx, db.ListHouseholdsParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Limit:           int32(limit + 1),
+		CursorCreatedAt: cursorCreatedAt,
+		CursorID:        cursorID,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list households: %w", err)
+		return nil, nil, wrap(err, "gagal memuat data household")
 	}
 
-	totalItems, err := s.store.CountHouseholds(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to count households: %w", err)
+	hasMore := len(households) > limit
+	if hasMore {
+		households = households[:limit]
 	}
 
 	items := make([]domain.HouseholdResponse, len(households))
@@ -90,12 +82,14 @@ func (s *householdService) List(ctx context.Context, page, limit int) ([]domain.
 		items[i] = domain.ToHouseholdResponse(h)
 	}
 
-	totalPages := int(math.Ceil(float64(totalItems) / float64(limit)))
 	meta := &response.Meta{
-		Page:       page,
-		Limit:      limit,
-		TotalItems: totalItems,
-		TotalPages: totalPages,
+		Limit:   limit,
+		HasMore: hasMore,
+	}
+	if hasMore && len(items) > 0 {
+		last := items[len(items)-1]
+		next := domain.EncodeCursor(last.CreatedAt, last.ID)
+		meta.NextCursor = &next
 	}
 
 	return items, meta, nil
@@ -104,20 +98,16 @@ func (s *householdService) List(ctx context.Context, page, limit int) ([]domain.
 func (s *householdService) Delete(ctx context.Context, id string) error {
 	pgUUID, err := domain.StringToUUID(id)
 	if err != nil {
-		return fmt.Errorf("invalid uuid: %w", err)
+		return invalidInputf("invalid uuid: %v", err)
 	}
 
-	// Verify exists first
 	_, err = s.store.GetHouseholdByID(ctx, pgUUID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.ErrHouseholdNotFound
-		}
-		return err
+		return lookup(err, domain.ErrHouseholdNotFound, "gagal mengambil data household")
 	}
 
 	if err := s.store.DeleteHousehold(ctx, pgUUID); err != nil {
-		return fmt.Errorf("failed to delete household: %w", err)
+		return wrap(err, "gagal menghapus data household")
 	}
 	return nil
 }

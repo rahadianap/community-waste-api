@@ -2,22 +2,17 @@ package service
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"math"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/rahadianap/community-waste-api/db/sqlc"
 	"github.com/rahadianap/community-waste-api/internal/domain"
 	"github.com/rahadianap/community-waste-api/internal/repository"
-	"github.com/rahadianap/community-waste-api/pkg/response"
+	"github.com/rahadianap/community-waste-api/internal/response"
 )
 
 type PickupService interface {
 	Create(ctx context.Context, req domain.CreatePickupRequest) (*domain.PickupResponse, error)
-	GetByID(ctx context.Context, id string) (*domain.PickupResponse, error)
-	List(ctx context.Context, statusStr, householdIDStr string, page, limit int) ([]domain.PickupResponse, *response.Meta, error)
+	List(ctx context.Context, statusStr, householdIDStr, cursorStr string, limit int) ([]domain.PickupResponse, *response.Meta, error)
 	Schedule(ctx context.Context, id string, req domain.SchedulePickupRequest) (*domain.PickupResponse, error)
 	Complete(ctx context.Context, id string) (*domain.PickupResponse, error)
 	Cancel(ctx context.Context, id string) (*domain.PickupResponse, error)
@@ -31,75 +26,60 @@ func NewPickupService(store repository.Store) PickupService {
 	return &pickupService{store: store}
 }
 
-// Create enforces BR-01: A household cannot create a new pickup request if they have any payment with pending status.
+// Create enforces BR-01: household with pending payments cannot create a pickup.
 func (s *pickupService) Create(ctx context.Context, req domain.CreatePickupRequest) (*domain.PickupResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, err
+		return nil, invalidInput(err)
 	}
 
 	householdUUID, err := domain.StringToUUID(req.HouseholdID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid household_id uuid: %w", err)
+		return nil, invalidInputf("invalid household_id: %v", err)
 	}
 
-	// 1. Verify household exists
 	_, err = s.store.GetHouseholdByID(ctx, householdUUID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrHouseholdNotFound
-		}
-		return nil, fmt.Errorf("failed to get household: %w", err)
+		return nil, lookup(err, domain.ErrHouseholdNotFound, "gagal mengambil data household")
 	}
 
-	// 2. Business Rule BR-01: Check for pending payments
+	// BR-01
 	pendingCount, err := s.store.CountPendingPaymentsByHouseholdID(ctx, householdUUID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check pending payments: %w", err)
+		return nil, wrap(err, "gagal menghitung data payment pending")
 	}
 	if pendingCount > 0 {
 		return nil, domain.ErrPendingPaymentExists
 	}
 
-	// 3. Create pickup
 	pickup, err := s.store.CreatePickup(ctx, db.CreatePickupParams{
 		HouseholdID: householdUUID,
 		Type:        db.WasteType(req.Type),
 		SafetyCheck: req.SafetyCheck,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pickup: %w", err)
+		return nil, wrap(err, "gagal membuat data pickup")
 	}
 
 	res := domain.ToPickupResponse(pickup)
 	return &res, nil
 }
 
-func (s *pickupService) GetByID(ctx context.Context, id string) (*domain.PickupResponse, error) {
-	pickupUUID, err := domain.StringToUUID(id)
+func (s *pickupService) List(ctx context.Context, statusStr, householdIDStr, cursorStr string, limit int) ([]domain.PickupResponse, *response.Meta, error) {
+	limit = normalizeLimit(limit)
+	cursorCreatedAt, cursorID, err := decodeCursor(cursorStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid uuid: %w", err)
+		return nil, nil, err
 	}
 
-	pickup, err := s.store.GetPickupByID(ctx, pickupUUID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrPickupNotFound
-		}
-		return nil, fmt.Errorf("failed to get pickup: %w", err)
+	validStatuses := map[string]bool{
+		"pending":   true,
+		"scheduled": true,
+		"completed": true,
+		"canceled":  true,
 	}
-
-	res := domain.ToPickupResponse(pickup)
-	return &res, nil
-}
-
-func (s *pickupService) List(ctx context.Context, statusStr, householdIDStr string, page, limit int) ([]domain.PickupResponse, *response.Meta, error) {
-	if page < 1 {
-		page = 1
+	if statusStr != "" && !validStatuses[statusStr] {
+		return nil, nil, invalidInputf("invalid status: must be pending, scheduled, completed, or canceled")
 	}
-	if limit < 1 {
-		limit = 10
-	}
-	offset := (page - 1) * limit
 
 	var nullStatus db.NullPickupStatus
 	if statusStr != "" {
@@ -112,27 +92,26 @@ func (s *pickupService) List(ctx context.Context, statusStr, householdIDStr stri
 	var householdUUID pgtype.UUID
 	if householdIDStr != "" {
 		parsed, err := domain.StringToUUID(householdIDStr)
-		if err == nil {
-			householdUUID = parsed
+		if err != nil {
+			return nil, nil, invalidInputf("invalid household_id uuid: %v", err)
 		}
+		householdUUID = parsed
 	}
 
 	pickups, err := s.store.ListPickups(ctx, db.ListPickupsParams{
-		Status:      nullStatus,
-		HouseholdID: householdUUID,
-		Limit:       int32(limit),
-		Offset:      int32(offset),
+		Status:          nullStatus,
+		HouseholdID:     householdUUID,
+		CursorCreatedAt: cursorCreatedAt,
+		CursorID:        cursorID,
+		Limit:           int32(limit + 1),
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list pickups: %w", err)
+		return nil, nil, wrap(err, "gagal memuat data pickup")
 	}
 
-	totalItems, err := s.store.CountPickups(ctx, db.CountPickupsParams{
-		Status:      nullStatus,
-		HouseholdID: householdUUID,
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to count pickups: %w", err)
+	hasMore := len(pickups) > limit
+	if hasMore {
+		pickups = pickups[:limit]
 	}
 
 	items := make([]domain.PickupResponse, len(pickups))
@@ -140,51 +119,46 @@ func (s *pickupService) List(ctx context.Context, statusStr, householdIDStr stri
 		items[i] = domain.ToPickupResponse(p)
 	}
 
-	totalPages := int(math.Ceil(float64(totalItems) / float64(limit)))
 	meta := &response.Meta{
-		Page:       page,
-		Limit:      limit,
-		TotalItems: totalItems,
-		TotalPages: totalPages,
+		Limit:   limit,
+		HasMore: hasMore,
+	}
+	if hasMore && len(items) > 0 {
+		last := items[len(items)-1]
+		next := domain.EncodeCursor(last.CreatedAt, last.ID)
+		meta.NextCursor = &next
 	}
 
 	return items, meta, nil
 }
 
-// Schedule enforces:
-// BR-02: A pickup can only be scheduled if its current status is pending.
-// BR-03: Electronic type pickups cannot be scheduled unless safety_check is true.
+// Schedule enforces BR-02 (only pending pickups) and BR-03 (electronic needs safety_check).
 func (s *pickupService) Schedule(ctx context.Context, id string, req domain.SchedulePickupRequest) (*domain.PickupResponse, error) {
 	pickupUUID, err := domain.StringToUUID(id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid uuid: %w", err)
+		return nil, invalidInputf("invalid uuid: %v", err)
 	}
 
 	pickupDate, err := req.Validate()
 	if err != nil {
-		return nil, err
+		return nil, invalidInput(err)
 	}
 
-	// 1. Fetch current pickup
 	pickup, err := s.store.GetPickupByID(ctx, pickupUUID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrPickupNotFound
-		}
-		return nil, fmt.Errorf("failed to get pickup: %w", err)
+		return nil, lookup(err, domain.ErrPickupNotFound, "gagal mengambil data pickup")
 	}
 
-	// 2. Business Rule BR-02: Must be pending
+	// BR-02
 	if pickup.Status != db.PickupStatusPending {
 		return nil, domain.ErrPickupNotPending
 	}
 
-	// 3. Business Rule BR-03: Electronic waste requires safety check
+	// BR-03
 	if pickup.Type == db.WasteTypeElectronic && !pickup.SafetyCheck {
 		return nil, domain.ErrSafetyCheckRequired
 	}
 
-	// 4. Update schedule in DB
 	updatedPickup, err := s.store.UpdatePickupSchedule(ctx, db.UpdatePickupScheduleParams{
 		ID: pickupUUID,
 		PickupDate: pgtype.Timestamptz{
@@ -193,31 +167,23 @@ func (s *pickupService) Schedule(ctx context.Context, id string, req domain.Sche
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to schedule pickup: %w", err)
+		return nil, wrap(err, "gagal menjadwalkan pickup")
 	}
 
 	res := domain.ToPickupResponse(updatedPickup)
 	return &res, nil
 }
 
-// Complete enforces:
-// BR-04: Once a pickup is completed, automatically generate a payment record:
-// - organic, plastic, paper -> amount = 50,000
-// - electronic -> amount = 100,000
-// Executed atomically inside a database transaction (tx).
+// Complete enforces BR-04: completing a pickup auto-creates the payment (50k, electronic 100k) inside ExecTx.
 func (s *pickupService) Complete(ctx context.Context, id string) (*domain.PickupResponse, error) {
 	pickupUUID, err := domain.StringToUUID(id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid uuid: %w", err)
+		return nil, invalidInputf("invalid uuid: %v", err)
 	}
 
-	// 1. Fetch current pickup
 	pickup, err := s.store.GetPickupByID(ctx, pickupUUID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrPickupNotFound
-		}
-		return nil, fmt.Errorf("failed to get pickup: %w", err)
+		return nil, lookup(err, domain.ErrPickupNotFound, "gagal mengambil data pickup")
 	}
 
 	if pickup.Status == db.PickupStatusCompleted {
@@ -227,7 +193,7 @@ func (s *pickupService) Complete(ctx context.Context, id string) (*domain.Pickup
 		return nil, domain.ErrPickupAlreadyCanceled
 	}
 
-	// 2. Calculate payment amount according to BR-04
+	// BR-04 amount
 	var amount float64
 	if pickup.Type == db.WasteTypeElectronic {
 		amount = 100000.00
@@ -237,12 +203,11 @@ func (s *pickupService) Complete(ctx context.Context, id string) (*domain.Pickup
 
 	numericAmount, err := domain.Float64ToNumeric(amount)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert amount: %w", err)
+		return nil, wrap(err, "gagal mengonversi data amount")
 	}
 
 	var updatedPickup db.WastePickup
 
-	// 3. Atomic Database Transaction: Update pickup -> completed AND create payment record
 	err = s.store.ExecTx(ctx, func(q db.Querier) error {
 		var err error
 		updatedPickup, err = q.UpdatePickupStatus(ctx, db.UpdatePickupStatusParams{
@@ -250,7 +215,7 @@ func (s *pickupService) Complete(ctx context.Context, id string) (*domain.Pickup
 			Status: db.PickupStatusCompleted,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to update pickup status to completed: %w", err)
+			return wrap(err, "gagal mengupdate status pickup")
 		}
 
 		_, err = q.CreatePayment(ctx, db.CreatePaymentParams{
@@ -260,14 +225,14 @@ func (s *pickupService) Complete(ctx context.Context, id string) (*domain.Pickup
 			Status:      db.PaymentStatusPending,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to automatically generate payment: %w", err)
+			return wrap(err, "gagal membuat data payment otomatis")
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("complete pickup transaction failed: %w", err)
+		return nil, wrap(err, "gagal menyelesaikan transaksi pickup")
 	}
 
 	res := domain.ToPickupResponse(updatedPickup)
@@ -278,19 +243,16 @@ func (s *pickupService) Complete(ctx context.Context, id string) (*domain.Pickup
 func (s *pickupService) Cancel(ctx context.Context, id string) (*domain.PickupResponse, error) {
 	pickupUUID, err := domain.StringToUUID(id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid uuid: %w", err)
+		return nil, invalidInputf("invalid uuid: %v", err)
 	}
 
 	pickup, err := s.store.GetPickupByID(ctx, pickupUUID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrPickupNotFound
-		}
-		return nil, fmt.Errorf("failed to get pickup: %w", err)
+		return nil, lookup(err, domain.ErrPickupNotFound, "gagal mengambil data pickup")
 	}
 
 	if pickup.Status == db.PickupStatusCompleted {
-		return nil, errors.New("cannot cancel a completed pickup")
+		return nil, domain.ErrCannotCancelCompleted
 	}
 
 	updatedPickup, err := s.store.UpdatePickupStatus(ctx, db.UpdatePickupStatusParams{
@@ -298,7 +260,7 @@ func (s *pickupService) Cancel(ctx context.Context, id string) (*domain.PickupRe
 		Status: db.PickupStatusCanceled,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to cancel pickup: %w", err)
+		return nil, wrap(err, "gagal membatalkan data pickup")
 	}
 
 	res := domain.ToPickupResponse(updatedPickup)

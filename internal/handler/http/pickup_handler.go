@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rahadianap/community-waste-api/internal/domain"
+	"github.com/rahadianap/community-waste-api/internal/response"
 	"github.com/rahadianap/community-waste-api/internal/service"
-	"github.com/rahadianap/community-waste-api/pkg/response"
 )
 
 type PickupHandler struct {
@@ -26,13 +26,16 @@ func (h *PickupHandler) Create(c *fiber.Ctx) error {
 
 	result, err := h.service.Create(c.Context(), req)
 	if err != nil {
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
 		if errors.Is(err, domain.ErrPendingPaymentExists) {
 			return response.Error(c, fiber.StatusUnprocessableEntity, err.Error(), nil)
 		}
 		if errors.Is(err, domain.ErrHouseholdNotFound) {
 			return response.Error(c, fiber.StatusNotFound, err.Error(), nil)
 		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		return response.Error(c, fiber.StatusInternalServerError, err.Error(), nil)
 	}
 
 	return response.Success(c, fiber.StatusCreated, "Pickup request created successfully", result)
@@ -41,28 +44,18 @@ func (h *PickupHandler) Create(c *fiber.Ctx) error {
 func (h *PickupHandler) List(c *fiber.Ctx) error {
 	status := c.Query("status")
 	householdID := c.Query("household_id")
-	page, _ := strconv.Atoi(c.Query("page", "1"))
+	cursor := c.Query("cursor")
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
 
-	items, meta, err := h.service.List(c.Context(), status, householdID, page, limit)
+	items, meta, err := h.service.List(c.Context(), status, householdID, cursor, limit)
 	if err != nil {
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
 		return response.Error(c, fiber.StatusInternalServerError, "Failed to retrieve pickups", err.Error())
 	}
 
 	return response.SuccessWithMeta(c, fiber.StatusOK, "Pickups retrieved successfully", items, meta)
-}
-
-func (h *PickupHandler) GetByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-	result, err := h.service.GetByID(c.Context(), id)
-	if err != nil {
-		if errors.Is(err, domain.ErrPickupNotFound) {
-			return response.Error(c, fiber.StatusNotFound, "Waste pickup not found", nil)
-		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
-	}
-
-	return response.Success(c, fiber.StatusOK, "Pickup retrieved successfully", result)
 }
 
 func (h *PickupHandler) Schedule(c *fiber.Ctx) error {
@@ -80,7 +73,10 @@ func (h *PickupHandler) Schedule(c *fiber.Ctx) error {
 		if errors.Is(err, domain.ErrPickupNotPending) || errors.Is(err, domain.ErrSafetyCheckRequired) {
 			return response.Error(c, fiber.StatusUnprocessableEntity, err.Error(), nil)
 		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, err.Error(), nil)
 	}
 
 	return response.Success(c, fiber.StatusOK, "Pickup scheduled successfully", result)
@@ -96,7 +92,10 @@ func (h *PickupHandler) Complete(c *fiber.Ctx) error {
 		if errors.Is(err, domain.ErrPickupAlreadyCompleted) || errors.Is(err, domain.ErrPickupAlreadyCanceled) {
 			return response.Error(c, fiber.StatusConflict, err.Error(), nil)
 		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, err.Error(), nil)
 	}
 
 	return response.Success(c, fiber.StatusOK, "Pickup marked as completed and payment created", result)
@@ -109,7 +108,13 @@ func (h *PickupHandler) Cancel(c *fiber.Ctx) error {
 		if errors.Is(err, domain.ErrPickupNotFound) {
 			return response.Error(c, fiber.StatusNotFound, err.Error(), nil)
 		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		if errors.Is(err, domain.ErrCannotCancelCompleted) {
+			return response.Error(c, fiber.StatusConflict, err.Error(), nil)
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, err.Error(), nil)
 	}
 
 	return response.Success(c, fiber.StatusOK, "Pickup canceled successfully", result)

@@ -96,3 +96,65 @@ func TestPaymentService_BR05_PaymentConfirmation(t *testing.T) {
 		mockUploader.AssertExpectations(t)
 	})
 }
+
+// Client input validation maps to ErrInvalidInput
+func TestPaymentService_InvalidInput(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("create: amount nol", func(t *testing.T) {
+		mockStore := new(MockStore)
+		mockUploader := new(MockUploader)
+		paymentSvc := service.NewPaymentService(mockStore, mockUploader)
+
+		hIDStr, _ := newTestUUID()
+		wIDStr, _ := newTestUUID()
+
+		res, err := paymentSvc.Create(ctx, domain.CreatePaymentRequest{
+			HouseholdID: hIDStr,
+			WasteID:     wIDStr,
+			Amount:      0,
+		})
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("create: uuid tidak valid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		mockUploader := new(MockUploader)
+		paymentSvc := service.NewPaymentService(mockStore, mockUploader)
+
+		res, err := paymentSvc.Create(ctx, domain.CreatePaymentRequest{
+			HouseholdID: "bukan-uuid",
+			WasteID:     "bukan-uuid",
+			Amount:      1000,
+		})
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("list: status tidak valid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		mockUploader := new(MockUploader)
+		paymentSvc := service.NewPaymentService(mockStore, mockUploader)
+
+		res, meta, err := paymentSvc.List(ctx, "bukan-status", "", "", "", "", 10)
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		assert.Nil(t, meta)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("list: tanggal tidak valid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		mockUploader := new(MockUploader)
+		paymentSvc := service.NewPaymentService(mockStore, mockUploader)
+
+		res, meta, err := paymentSvc.List(ctx, "", "", "32-13-2026", "", "", 10)
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		assert.Nil(t, meta)
+		mockStore.AssertExpectations(t)
+	})
+}

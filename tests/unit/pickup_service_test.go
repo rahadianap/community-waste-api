@@ -296,3 +296,113 @@ func TestPickupService_BR04_AutoPaymentGenerationOnComplete(t *testing.T) {
 		mockStore.AssertExpectations(t)
 	})
 }
+
+// Client input validation and cancel rules map to the correct sentinel errors
+func TestPickupService_InvalidInputAndCancelRules(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("create: household_id bukan uuid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		pickupSvc := service.NewPickupService(mockStore)
+
+		res, err := pickupSvc.Create(ctx, domain.CreatePickupRequest{
+			HouseholdID: "bukan-uuid",
+			Type:        "organic",
+		})
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("create: tipe sampah tidak valid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		pickupSvc := service.NewPickupService(mockStore)
+
+		hIDStr, _ := newTestUUID()
+		res, err := pickupSvc.Create(ctx, domain.CreatePickupRequest{
+			HouseholdID: hIDStr,
+			Type:        "chemical",
+		})
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("schedule: uuid tidak valid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		pickupSvc := service.NewPickupService(mockStore)
+
+		res, err := pickupSvc.Schedule(ctx, "bukan-uuid", domain.SchedulePickupRequest{
+			PickupDate: "2026-10-15T10:00:00Z",
+		})
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("schedule: pickup_date tidak valid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		pickupSvc := service.NewPickupService(mockStore)
+
+		pIDStr, _ := newTestUUID()
+		res, err := pickupSvc.Schedule(ctx, pIDStr, domain.SchedulePickupRequest{
+			PickupDate: "besok",
+		})
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("list: status tidak valid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		pickupSvc := service.NewPickupService(mockStore)
+
+		res, meta, err := pickupSvc.List(ctx, "bukan-status", "", "", 10)
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		assert.Nil(t, meta)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("list: household_id bukan uuid", func(t *testing.T) {
+		mockStore := new(MockStore)
+		pickupSvc := service.NewPickupService(mockStore)
+
+		res, meta, err := pickupSvc.List(ctx, "", "bukan-uuid", "", 10)
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		assert.Nil(t, meta)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("list: cursor rusak", func(t *testing.T) {
+		mockStore := new(MockStore)
+		pickupSvc := service.NewPickupService(mockStore)
+
+		res, meta, err := pickupSvc.List(ctx, "", "", "cursor-rusak!", 10)
+		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		assert.Nil(t, res)
+		assert.Nil(t, meta)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("cancel: pickup sudah completed", func(t *testing.T) {
+		mockStore := new(MockStore)
+		pickupSvc := service.NewPickupService(mockStore)
+
+		_, hID := newTestUUID()
+		pIDStr, pID := newTestUUID()
+
+		mockStore.On("GetPickupByID", ctx, pID).Return(db.WastePickup{
+			ID:          pID,
+			HouseholdID: hID,
+			Type:        db.WasteTypeOrganic,
+			Status:      db.PickupStatusCompleted,
+		}, nil)
+
+		res, err := pickupSvc.Cancel(ctx, pIDStr)
+		assert.ErrorIs(t, err, domain.ErrCannotCancelCompleted)
+		assert.Nil(t, res)
+		mockStore.AssertExpectations(t)
+	})
+}

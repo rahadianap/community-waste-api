@@ -11,53 +11,48 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rahadianap/community-waste-api/internal/config"
+	"github.com/rahadianap/community-waste-api/internal/database"
 	httpHandler "github.com/rahadianap/community-waste-api/internal/handler/http"
 	"github.com/rahadianap/community-waste-api/internal/handler/middleware"
 	"github.com/rahadianap/community-waste-api/internal/repository"
+	"github.com/rahadianap/community-waste-api/internal/response"
 	"github.com/rahadianap/community-waste-api/internal/service"
-	"github.com/rahadianap/community-waste-api/pkg/database"
-	"github.com/rahadianap/community-waste-api/pkg/uploader"
+	"github.com/rahadianap/community-waste-api/internal/uploader"
 )
 
 func main() {
-	log.Println("Starting Community Waste Collection API...")
+	log.Println("Starting API...")
 
-	// 1. Load Configurations
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		log.Fatalf("gagal memuat config: %v", err)
 	}
 
-	// 2. Initialize Database Connection Pool
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	pool, err := database.NewPostgresPool(ctx, cfg.DatabaseURL())
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("gagal terhubung ke database: %v", err)
 	}
 	defer pool.Close()
 
-	// 3. Run Database Migrations
 	migrationsPath := "db/migrations"
 	if _, err := os.Stat(migrationsPath); os.IsNotExist(err) {
 		migrationsPath = "/app/db/migrations"
 	}
 	if err := database.RunMigrations(cfg.DatabaseURL(), migrationsPath); err != nil {
-		log.Printf("Warning during database migrations: %v", err)
+		log.Printf("Warning saat migrasi database: %v", err)
 	}
 
-	// 4. Initialize Store & Layer Components
 	store := repository.NewStore(pool)
 	fileUploader := uploader.NewLocalUploader(cfg.UploadDir, cfg.MaxUploadSizeMB)
 
-	// Services
 	householdSvc := service.NewHouseholdService(store)
 	pickupSvc := service.NewPickupService(store)
 	paymentSvc := service.NewPaymentService(store, fileUploader)
 	reportSvc := service.NewReportService(store)
 
-	// Handlers
 	handlers := httpHandler.Handlers{
 		Household: httpHandler.NewHouseholdHandler(householdSvc),
 		Pickup:    httpHandler.NewPickupHandler(pickupSvc),
@@ -65,43 +60,56 @@ func main() {
 		Report:    httpHandler.NewReportHandler(reportSvc),
 	}
 
-	// 5. Initialize Fiber App
 	app := fiber.New(fiber.Config{
-		AppName:      "Community Waste Collection API v1.0",
+		AppName:      "Community Waste Collection API",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		BodyLimit:    cfg.MaxUploadSizeMB * 1024 * 1024,
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			code := fiber.StatusInternalServerError
+			message := "Internal Server Error"
+			if e, ok := err.(*fiber.Error); ok {
+				code = e.Code
+				message = e.Message
+			}
+			return c.Status(code).JSON(response.APIResponse{
+				StatusCode: code,
+				Success:    false,
+				Message:    message,
+			})
+		},
 	})
 
-	// Middlewares
 	middleware.SetupMiddlewares(app)
-
-	// Routes
-	httpHandler.RegisterRoutes(app, handlers, cfg.UploadDir)
-
-	// 6. Start Server with Graceful Shutdown
-	serverShutdown := make(chan struct{})
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-		<-sigChan
-
-		log.Println("Received shutdown signal, gracefully shutting down server...")
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer shutdownCancel()
-
-		if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-			log.Printf("Error during server shutdown: %v", err)
-		}
-		close(serverShutdown)
-	}()
+	httpHandler.RegisterRoutes(app, handlers)
 
 	addr := fmt.Sprintf(":%s", cfg.AppPort)
-	log.Printf("Server listening on %s (env: %s)", addr, cfg.AppEnv)
-	if err := app.Listen(addr); err != nil {
-		log.Printf("Server stopped: %v", err)
+	serverErrors := make(chan error, 1)
+
+	go func() {
+		log.Printf("Server berjalan pada %s (env: %s)", addr, cfg.AppEnv)
+		if err := app.Listen(addr); err != nil {
+			serverErrors <- err
+		}
+	}()
+
+	channel := make(chan os.Signal, 1)
+	signal.Notify(channel, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErrors:
+		log.Printf("Server gagal berjalan: %v", err)
+		return
+	case sig := <-channel:
+		log.Printf("Menerima sinyal (%v), mematikan server...", sig)
 	}
 
-	<-serverShutdown
-	log.Println("Server gracefully stopped.")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
+		log.Printf("Error saat mematikan server: %v", err)
+	}
+
+	log.Println("Server berjalan dengan normal")
 }

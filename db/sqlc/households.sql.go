@@ -11,17 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countHouseholds = `-- name: CountHouseholds :one
-SELECT COUNT(*) FROM households
-`
-
-func (q *Queries) CountHouseholds(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countHouseholds)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createHousehold = `-- name: CreateHousehold :one
 INSERT INTO households (
     owner_name,
@@ -79,17 +68,20 @@ func (q *Queries) GetHouseholdByID(ctx context.Context, id pgtype.UUID) (Househo
 
 const listHouseholds = `-- name: ListHouseholds :many
 SELECT id, owner_name, address, created_at, updated_at FROM households
-ORDER BY created_at DESC
-LIMIT $1 OFFSET $2
+WHERE $1::timestamptz IS NULL
+    OR (created_at, id) < ($1::timestamptz, $2::uuid)
+ORDER BY created_at DESC, id DESC
+LIMIT $3
 `
 
 type ListHouseholdsParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        pgtype.UUID        `json:"cursor_id"`
+	Limit           int32              `json:"limit"`
 }
 
 func (q *Queries) ListHouseholds(ctx context.Context, arg ListHouseholdsParams) ([]Household, error) {
-	rows, err := q.db.Query(ctx, listHouseholds, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listHouseholds, arg.CursorCreatedAt, arg.CursorID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

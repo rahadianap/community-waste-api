@@ -2,8 +2,8 @@ package http
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/rahadianap/community-waste-api/internal/response"
 	"github.com/rahadianap/community-waste-api/internal/service"
-	"github.com/rahadianap/community-waste-api/pkg/response"
 )
 
 type ReportHandler struct {

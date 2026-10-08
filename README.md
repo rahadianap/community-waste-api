@@ -1,39 +1,10 @@
 # Community Waste Collection API
 
-RESTful API backend untuk **Sistem Pengumpulan Sampah Komunitas**, dibangun menggunakan **Go**, **Fiber v2**, **PostgreSQL**, dan **sqlc**.
-
-Proyek ini dibuat untuk memenuhi **Take Home Test Backend Developer (Golang)** di **PT. Green Energi Utama**.
+RESTful API untuk **Sistem Pengumpulan Sampah Komunitas**.
 
 ---
 
-## 📋 Daftar Isi
-1. [Tech Stack](#-tech-stack)
-2. [Arsitektur & Struktur Proyek](#-arsitektur--struktur-proyek)
-3. [Aturan Bisnis (Business Rules)](#-aturan-bisnis-business-rules)
-4. [Quick Start (Docker Compose)](#-quick-start-docker-compose)
-5. [Setup Lokal (Manual)](#-setup-lokal-manual)
-6. [Database Migration & Seeding](#-database-migration--seeding)
-7. [Unit Testing](#-unit-testing)
-8. [Environment Variables](#-environment-variables)
-9. [Dokumentasi API & Postman](#-dokumentasi-api--postman)
-
----
-
-## 🛠 Tech Stack
-
-- **Bahasa Pemrograman:** Go (Golang) 1.24+
-- **HTTP Framework:** [GoFiber v2](https://github.com/gofiber/fiber) (Fast, Express-like HTTP engine)
-- **Database:** PostgreSQL 16 (Native ENUMs, UUID, Foreign Keys)
-- **Database Driver & Generator:** [sqlc](https://sqlc.dev) + [pgx/v5](https://github.com/jackc/pgx/v5) (Compile-time type-safe SQL, zero reflection)
-- **Database Migrations:** [golang-migrate](https://github.com/golang-migrate/migrate)
-- **Containerization:** Docker & Docker Compose
-- **Testing:** [testify/mock](https://github.com/stretchr/testify)
-
----
-
-## 🏛 Arsitektur & Struktur Proyek
-
-Proyek ini mengadopsi **Clean / Layered Architecture** dengan pemisahan tanggung jawab yang tegas:
+## Arsitektur & Struktur Proyek
 
 ```
 community-waste-api/
@@ -41,7 +12,7 @@ community-waste-api/
 │   ├── api/
 │   │   └── main.go                 # Entrypoint server Fiber & Graceful Shutdown
 │   └── seeder/
-│       └── main.go                 # Seeder data realistis untuk pengujian reviewer
+│       └── main.go                 # Seeder data
 ├── db/
 │   ├── migrations/                 # Migrasi SQL DDL (Up & Down)
 │   │   ├── 000001_create_households.up.sql
@@ -66,18 +37,18 @@ community-waste-api/
 ├── internal/
 │   ├── config/                     # Loader environment variables
 │   ├── domain/                     # Model domain, DTOs, dan custom errors
-│   ├── repository/                 # Store pattern & transaction runner (ExecTx)
-│   ├── service/                    # Layer logika bisnis & penegakan 5 aturan bisnis
-│   └── handler/                    # Presentation layer (HTTP handlers, router, middlewares)
-├── pkg/
 │   ├── database/                   # Pool pgx & runner migrasi otomatis
 │   ├── response/                   # Standardized JSON response envelope
-│   └── uploader/                   # File validation (MIME, size) & penyimpanan disk lokal
+│   ├── uploader/                   # File validation (MIME, size) & penyimpanan direktori lokal
+│   ├── repository/                 # Store pattern & transaction runner (ExecTx)
+│   ├── service/                    # Layer logika bisnis
+│   └── handler/                    # Presentation layer (HTTP handlers, router, middlewares)
 ├── tests/
-│   └── unit/                       # Unit tests aturan bisnis dengan mock Store
+│   └── unit/                       # Unit tests
 ├── uploads/
-│   └── payments/                   # Volume penyimpanan bukti pembayaran
+│   └── payments/                   # Direktori penyimpanan bukti pembayaran
 ├── postman/
+│   ├── Community_Waste_API.insomnia_collection.json
 │   ├── Community_Waste_API.postman_collection.json
 │   └── Community_Waste_API.postman_environment.json
 ├── Dockerfile
@@ -95,21 +66,7 @@ community-waste-api/
 
 ---
 
-## ⚖ Aturan Bisnis (Business Rules)
-
-| ID | Aturan Bisnis | Implementasi & Penegakan | Status HTTP & Penanganan |
-|---|---|---|---|
-| **BR-01** | Household **tidak dapat membuat pickup baru** jika memiliki payment berstatus `pending`. | Diperiksa di `PickupService.Create` via `CountPendingPaymentsByHouseholdID`. | `422 Unprocessable Entity` jika ada tagihan pending. |
-| **BR-02** | Pickup **hanya dapat dijadwalkan** jika status saat ini bernilai `pending`. | Diperiksa di `PickupService.Schedule`. Pickup yang sudah scheduled/completed/canceled ditolak. | `422 Unprocessable Entity` / `400 Bad Request`. |
-| **BR-03** | Pickup tipe `electronic` **tidak dapat dijadwalkan** kecuali `safety_check == true`. | Diperiksa di `PickupService.Schedule`. Validasi khusus tipe electronic. | `422 Unprocessable Entity` jika safety check bernilai false. |
-| **BR-04** | Saat pickup ditandai `completed`, otomatis generate tagihan `Payment`: <br>• `organic`, `plastic`, `paper` = Rp50.000 <br>• `electronic` = Rp100.000 | Dieksekusi secara **atomik dalam 1 Transaksi Database (`ExecTx`)** di `PickupService.Complete`. | `200 OK` (Record payment status `pending` langsung terbuat). |
-| **BR-05** | Konfirmasi payment (`/confirm`) **wajib upload file bukti bayar**. File disimpan di disk lokal & URL/path disimpan di record. | Diproses di `PaymentService.Confirm` via `LocalUploader`. Validasi format file (`jpg, jpeg, png, pdf`) dan ukuran max. | `200 OK` (Status berubah menjadi `paid`, `payment_date` terisi, path disimpan). |
-
----
-
-## 🚀 Quick Start (Docker Compose)
-
-Cukup **satu perintah** untuk menjalankan seluruh sistem (Aplikasi Go + PostgreSQL):
+## Quick Start (Docker Compose)
 
 ```bash
 docker compose up --build
@@ -127,9 +84,9 @@ docker compose down
 
 ---
 
-## 💻 Setup Lokal (Manual)
+## Setup Lokal (Manual)
 
-### Prasyarat
+### Requirements
 - Go 1.22+
 - PostgreSQL 14+ berjalan lokal
 - Port `8080` dan `5432` tersedia
@@ -154,83 +111,43 @@ docker compose down
 
 ---
 
-## 🗄 Database Migration & Seeding
+## Database Migration & Seeding
 
-### Seeding Data Pengujian
-Untuk mempermudah review dan pengujian seluruh skenario (termasuk skenario lolos dan skenario ditolak aturan bisnis), jalankan script seeder:
+### Seeding Data
 
 ```bash
 go run cmd/seeder/main.go
 # atau menggunakan Makefile:
 make seed
 ```
-
-**Data yang digenerate oleh seeder:**
-- 3 Rumah Tangga (Budi Santoso, Siti Rahmawati, Ahmad Fauzi)
-- 5 Waste Pickups:
-  - Budi Santoso: Organic (Scheduled), Plastic (Completed)
-  - Siti Rahmawati: Electronic (Pending, `safety_check: true`), Paper (Pending)
-  - Ahmad Fauzi: Electronic (Pending, `safety_check: false` ➡️ *siap menguji kegagalan BR-03*)
-- 2 Payments:
-  - Budi Santoso: Plastic pickup (Status `paid`, Rp50.000)
-  - Ahmad Fauzi: Electronic pickup (Status `pending`, Rp100.000 ➡️ *siap menguji kegagalan BR-01 saat Ahmad membuat pickup baru*)
-
 ---
 
-## 🧪 Unit Testing
+## Environment Variables
 
-Unit test dirancang untuk menguji seluruh logika aturan bisnis (**BR-01** s/d **BR-05**) secara cepat dan terisolasi menggunakan **Mock Store**:
-
-```bash
-go test -v ./tests/unit/...
-# atau menggunakan Makefile:
-make test
-```
-
-Contoh output:
-```
-=== RUN   TestPickupService_BR01_PendingPaymentCheck
-    --- PASS: TestPickupService_BR01_PendingPaymentCheck/BR-01_Fail (0.00s)
-    --- PASS: TestPickupService_BR01_PendingPaymentCheck/BR-01_Success (0.00s)
-=== RUN   TestPickupService_BR02_OnlyPendingCanBeScheduled
-    --- PASS: TestPickupService_BR02_OnlyPendingCanBeScheduled (0.00s)
-=== RUN   TestPickupService_BR03_ElectronicSafetyCheck
-    --- PASS: TestPickupService_BR03_ElectronicSafetyCheck/BR-03_Fail (0.00s)
-    --- PASS: TestPickupService_BR03_ElectronicSafetyCheck/BR-03_Success (0.00s)
-=== RUN   TestPickupService_BR04_AutoPaymentGenerationOnComplete
-    --- PASS: TestPickupService_BR04_AutoPaymentGenerationOnComplete/Organic_50k (0.00s)
-    --- PASS: TestPickupService_BR04_AutoPaymentGenerationOnComplete/Electronic_100k (0.00s)
-=== RUN   TestPaymentService_BR05_PaymentConfirmation
-    --- PASS: TestPaymentService_BR05_PaymentConfirmation/BR-05_Fail (0.00s)
-    --- PASS: TestPaymentService_BR05_PaymentConfirmation/BR-05_Success (0.00s)
-PASS
-```
-
----
-
-## ⚙ Environment Variables
-
-| Variable | Default Value | Deskripsi |
+| Variable | Default Value
 |---|---|---|
-| `APP_ENV` | `development` | Environment mode (`development` / `production`) |
-| `APP_PORT` | `8080` | Port listen server HTTP |
-| `BASE_URL` | `http://localhost:8080` | Base URL server untuk file upload |
-| `DB_HOST` | `localhost` (docker: `postgres`) | Host server PostgreSQL |
-| `DB_PORT` | `5432` | Port server PostgreSQL |
-| `DB_USER` | `postgres` | Username PostgreSQL |
-| `DB_PASSWORD` | `postgres` | Password PostgreSQL |
-| `DB_NAME` | `waste_collection_db` | Nama database |
-| `DB_SSLMODE` | `disable` | SSL mode koneksi database |
-| `UPLOAD_DIR` | `./uploads/payments` | Direktori penyimpanan bukti bayar |
-| `MAX_UPLOAD_SIZE_MB` | `5` | Batas maksimum ukuran upload (MB) |
+| `APP_ENV` | `development`
+| `APP_PORT` | `8080`
+| `BASE_URL` | `http://localhost:8080`
+| `DB_HOST` | `localhost` (docker: `postgres`)
+| `DB_PORT` | `5432`
+| `DB_USER` | `postgres`
+| `DB_PASSWORD` | `postgres`
+| `DB_NAME` | `waste_collection_db`
+| `DB_SSLMODE` | `disable`
+| `UPLOAD_DIR` | `./uploads/payments`
+| `MAX_UPLOAD_SIZE_MB` | `5`
 
 ---
 
-## 📬 Dokumentasi API & Postman
+## Dokumentasi API & Postman
 
-File koleksi Postman telah disertakan pada direktori `postman/`:
-1. `postman/Community_Waste_API.postman_collection.json`
-2. `postman/Community_Waste_API.postman_environment.json`
+File koleksi API telah disertakan untuk **Postman** dan **Insomnia**:
+- **Postman:**
+  1. `postman/Community_Waste_API.postman_collection.json`
+  2. `postman/Community_Waste_API.postman_environment.json`
+- **Insomnia:**
+  1. `postman/Community_Waste_API.insomnia_collection.json` (Import via *Create > Import from File*)
 
 ### Cara Menggunakan Postman:
 1. Buka aplikasi **Postman**.
@@ -241,29 +158,26 @@ File koleksi Postman telah disertakan pada direktori `postman/`:
 ### Ringkasan Endpoint
 
 #### 1. Household Endpoints
-- `POST /api/households` - Tambah data rumah tangga
-- `GET /api/households?page=1&limit=10` - Daftar rumah tangga dengan pagination
-- `GET /api/households/:id` - Detail data rumah tangga
-- `DELETE /api/households/:id` - Hapus rumah tangga
+- `POST /api/households` - Tambah data household
+- `GET /api/households?limit=10` - List households dengan pagination (cursor-based)
+- `GET /api/households/:id` - Detail data household
+- `DELETE /api/households/:id` - Hapus household
 
 #### 2. Waste Pickup Endpoints
-- `POST /api/pickups` - Buat permintaan pengambilan sampah (type wajib)
-- `GET /api/pickups?status=pending&household_id=:uuid&page=1&limit=10` - Filter & daftar pickup
-- `GET /api/pickups/:id` - Detail pickup
-- `PUT /api/pickups/:id/schedule` - Jadwalkan pickup (`pickup_date` wajib)
+- `POST /api/pickups` - Buat permintaan pengambilan sampah
+- `GET /api/pickups?status=pending&household_id=:uuid&limit=10` - List Pickup dengan filter status
+- `PUT /api/pickups/:id/schedule` - Jadwalkan pickup
 - `PUT /api/pickups/:id/complete` - Tandai selesai & trigger pembuatan payment otomatis
 - `PUT /api/pickups/:id/cancel` - Batalkan pickup
 
 #### 3. Payment Endpoints
 - `POST /api/payments` - Buat payment manual terkait household & waste
-- `GET /api/payments?status=paid&start_date=2026-10-01&end_date=2026-10-31` - Filter & rentang tanggal
-- `GET /api/payments/:id` - Detail payment
+- `GET /api/payments?status=paid&start_date=2026-10-01&end_date=2026-10-31` - List Payment Filter & rentang tanggal
 - `PUT /api/payments/:id/confirm` - Konfirmasi payment dengan upload bukti bayar (`multipart/form-data`, field: `proof_file`)
 
 #### 4. Reporting Endpoints
 - `GET /api/reports/waste-summary` - Rekap agregat sampah berdasarkan type dan status
 - `GET /api/reports/payment-summary` - Rekap pembayaran per status dan total pendapatan
 
-#### 5. Static Files & Health Check
+#### 5. Health Check
 - `GET /health` - Server health check
-- `GET /uploads/payments/:filename` - Akses file bukti transfer yang telah di-upload

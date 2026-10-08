@@ -20,11 +20,6 @@ func (m *MockStore) ExecTx(ctx context.Context, fn func(q db.Querier) error) err
 	return fn(m)
 }
 
-func (m *MockStore) CountHouseholds(ctx context.Context) (int64, error) {
-	args := m.Called(ctx)
-	return args.Get(0).(int64), args.Error(1)
-}
-
 func (m *MockStore) CreateHousehold(ctx context.Context, arg db.CreateHouseholdParams) (db.Household, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).(db.Household), args.Error(1)
@@ -50,11 +45,6 @@ func (m *MockStore) ConfirmPayment(ctx context.Context, arg db.ConfirmPaymentPar
 	return args.Get(0).(db.Payment), args.Error(1)
 }
 
-func (m *MockStore) CountPayments(ctx context.Context, arg db.CountPaymentsParams) (int64, error) {
-	args := m.Called(ctx, arg)
-	return args.Get(0).(int64), args.Error(1)
-}
-
 func (m *MockStore) CountPendingPaymentsByHouseholdID(ctx context.Context, householdID pgtype.UUID) (int64, error) {
 	args := m.Called(ctx, householdID)
 	return args.Get(0).(int64), args.Error(1)
@@ -73,11 +63,6 @@ func (m *MockStore) GetPaymentByID(ctx context.Context, id pgtype.UUID) (db.Paym
 func (m *MockStore) ListPayments(ctx context.Context, arg db.ListPaymentsParams) ([]db.Payment, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).([]db.Payment), args.Error(1)
-}
-
-func (m *MockStore) CountPickups(ctx context.Context, arg db.CountPickupsParams) (int64, error) {
-	args := m.Called(ctx, arg)
-	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *MockStore) CreatePickup(ctx context.Context, arg db.CreatePickupParams) (db.WastePickup, error) {

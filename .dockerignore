@@ -1,0 +1,5 @@
+bin
+uploads/payments/*
+!uploads/payments/.gitkeep
+.git
+.env

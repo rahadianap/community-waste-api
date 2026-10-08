@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rahadianap/community-waste-api/internal/domain"
+	"github.com/rahadianap/community-waste-api/internal/response"
 	"github.com/rahadianap/community-waste-api/internal/service"
-	"github.com/rahadianap/community-waste-api/pkg/response"
 )
 
 type HouseholdHandler struct {
@@ -26,22 +26,28 @@ func (h *HouseholdHandler) Create(c *fiber.Ctx) error {
 
 	result, err := h.service.Create(c.Context(), req)
 	if err != nil {
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, err.Error(), nil)
 	}
 
-	return response.Success(c, fiber.StatusCreated, "Household created successfully", result)
+	return response.Success(c, fiber.StatusCreated, "Data berhasil ditambahkan", result)
 }
 
 func (h *HouseholdHandler) List(c *fiber.Ctx) error {
-	page, _ := strconv.Atoi(c.Query("page", "1"))
+	cursor := c.Query("cursor")
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
 
-	items, meta, err := h.service.List(c.Context(), page, limit)
+	items, meta, err := h.service.List(c.Context(), cursor, limit)
 	if err != nil {
-		return response.Error(c, fiber.StatusInternalServerError, "Failed to retrieve households", err.Error())
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, "Data gagal diambil", err.Error())
 	}
 
-	return response.SuccessWithMeta(c, fiber.StatusOK, "Households retrieved successfully", items, meta)
+	return response.SuccessWithMeta(c, fiber.StatusOK, "Data berhasil diambil", items, meta)
 }
 
 func (h *HouseholdHandler) GetByID(c *fiber.Ctx) error {
@@ -49,12 +55,15 @@ func (h *HouseholdHandler) GetByID(c *fiber.Ctx) error {
 	result, err := h.service.GetByID(c.Context(), id)
 	if err != nil {
 		if errors.Is(err, domain.ErrHouseholdNotFound) {
-			return response.Error(c, fiber.StatusNotFound, "Household not found", nil)
+			return response.Error(c, fiber.StatusNotFound, "Data tidak ditemukan", nil)
 		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, err.Error(), nil)
 	}
 
-	return response.Success(c, fiber.StatusOK, "Household retrieved successfully", result)
+	return response.Success(c, fiber.StatusOK, "Data berhasil diambil", result)
 }
 
 func (h *HouseholdHandler) Delete(c *fiber.Ctx) error {
@@ -62,10 +71,13 @@ func (h *HouseholdHandler) Delete(c *fiber.Ctx) error {
 	err := h.service.Delete(c.Context(), id)
 	if err != nil {
 		if errors.Is(err, domain.ErrHouseholdNotFound) {
-			return response.Error(c, fiber.StatusNotFound, "Household not found", nil)
+			return response.Error(c, fiber.StatusNotFound, "Data tidak ditemukan", nil)
 		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, err.Error(), nil)
 	}
 
-	return response.Success(c, fiber.StatusOK, "Household deleted successfully", nil)
+	return response.Success(c, fiber.StatusOK, "Data berhasil dihapus", nil)
 }

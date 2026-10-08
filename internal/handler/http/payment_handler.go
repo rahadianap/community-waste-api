@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rahadianap/community-waste-api/internal/domain"
+	"github.com/rahadianap/community-waste-api/internal/response"
 	"github.com/rahadianap/community-waste-api/internal/service"
-	"github.com/rahadianap/community-waste-api/pkg/response"
 )
 
 type PaymentHandler struct {
@@ -29,7 +29,10 @@ func (h *PaymentHandler) Create(c *fiber.Ctx) error {
 		if errors.Is(err, domain.ErrHouseholdNotFound) || errors.Is(err, domain.ErrPickupNotFound) {
 			return response.Error(c, fiber.StatusNotFound, err.Error(), nil)
 		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		return response.Error(c, fiber.StatusInternalServerError, err.Error(), nil)
 	}
 
 	return response.Success(c, fiber.StatusCreated, "Payment record created successfully", result)
@@ -40,28 +43,18 @@ func (h *PaymentHandler) List(c *fiber.Ctx) error {
 	householdID := c.Query("household_id")
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
-	page, _ := strconv.Atoi(c.Query("page", "1"))
+	cursor := c.Query("cursor")
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
 
-	items, meta, err := h.service.List(c.Context(), status, householdID, startDate, endDate, page, limit)
+	items, meta, err := h.service.List(c.Context(), status, householdID, startDate, endDate, cursor, limit)
 	if err != nil {
+		if errors.Is(err, domain.ErrInvalidInput) {
+			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
+		}
 		return response.Error(c, fiber.StatusInternalServerError, "Failed to retrieve payments", err.Error())
 	}
 
 	return response.SuccessWithMeta(c, fiber.StatusOK, "Payments retrieved successfully", items, meta)
-}
-
-func (h *PaymentHandler) GetByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-	result, err := h.service.GetByID(c.Context(), id)
-	if err != nil {
-		if errors.Is(err, domain.ErrPaymentNotFound) {
-			return response.Error(c, fiber.StatusNotFound, "Payment record not found", nil)
-		}
-		return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
-	}
-
-	return response.Success(c, fiber.StatusOK, "Payment retrieved successfully", result)
 }
 
 func (h *PaymentHandler) Confirm(c *fiber.Ctx) error {
@@ -81,7 +74,8 @@ func (h *PaymentHandler) Confirm(c *fiber.Ctx) error {
 		if errors.Is(err, domain.ErrPaymentAlreadyPaid) {
 			return response.Error(c, fiber.StatusConflict, err.Error(), nil)
 		}
-		if errors.Is(err, domain.ErrInvalidFileType) || errors.Is(err, domain.ErrFileSizeExceeded) {
+		if errors.Is(err, domain.ErrInvalidFileType) || errors.Is(err, domain.ErrFileSizeExceeded) ||
+			errors.Is(err, domain.ErrProofFileRequired) || errors.Is(err, domain.ErrInvalidInput) {
 			return response.Error(c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 		return response.Error(c, fiber.StatusInternalServerError, "Failed to confirm payment", err.Error())

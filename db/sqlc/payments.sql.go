@@ -44,34 +44,6 @@ func (q *Queries) ConfirmPayment(ctx context.Context, arg ConfirmPaymentParams) 
 	return i, err
 }
 
-const countPayments = `-- name: CountPayments :one
-SELECT COUNT(*) FROM payments
-WHERE 
-    ($1::payment_status IS NULL OR status = $1) AND
-    ($2::uuid IS NULL OR household_id = $2) AND
-    ($3::timestamptz IS NULL OR created_at >= $3) AND
-    ($4::timestamptz IS NULL OR created_at <= $4)
-`
-
-type CountPaymentsParams struct {
-	Status      NullPaymentStatus  `json:"status"`
-	HouseholdID pgtype.UUID        `json:"household_id"`
-	StartDate   pgtype.Timestamptz `json:"start_date"`
-	EndDate     pgtype.Timestamptz `json:"end_date"`
-}
-
-func (q *Queries) CountPayments(ctx context.Context, arg CountPaymentsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countPayments,
-		arg.Status,
-		arg.HouseholdID,
-		arg.StartDate,
-		arg.EndDate,
-	)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countPendingPaymentsByHouseholdID = `-- name: CountPendingPaymentsByHouseholdID :one
 SELECT COUNT(*) FROM payments
 WHERE household_id = $1 AND status = 'pending'
@@ -153,18 +125,21 @@ WHERE
     ($1::payment_status IS NULL OR status = $1) AND
     ($2::uuid IS NULL OR household_id = $2) AND
     ($3::timestamptz IS NULL OR created_at >= $3) AND
-    ($4::timestamptz IS NULL OR created_at <= $4)
-ORDER BY created_at DESC
-LIMIT $6 OFFSET $5
+    ($4::timestamptz IS NULL OR created_at <= $4) AND
+    ($5::timestamptz IS NULL OR
+        (created_at, id) < ($5::timestamptz, $6::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT $7
 `
 
 type ListPaymentsParams struct {
-	Status      NullPaymentStatus  `json:"status"`
-	HouseholdID pgtype.UUID        `json:"household_id"`
-	StartDate   pgtype.Timestamptz `json:"start_date"`
-	EndDate     pgtype.Timestamptz `json:"end_date"`
-	Offset      int32              `json:"offset"`
-	Limit       int32              `json:"limit"`
+	Status          NullPaymentStatus  `json:"status"`
+	HouseholdID     pgtype.UUID        `json:"household_id"`
+	StartDate       pgtype.Timestamptz `json:"start_date"`
+	EndDate         pgtype.Timestamptz `json:"end_date"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        pgtype.UUID        `json:"cursor_id"`
+	Limit           int32              `json:"limit"`
 }
 
 func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]Payment, error) {
@@ -173,7 +148,8 @@ func (q *Queries) ListPayments(ctx context.Context, arg ListPaymentsParams) ([]P
 		arg.HouseholdID,
 		arg.StartDate,
 		arg.EndDate,
-		arg.Offset,
+		arg.CursorCreatedAt,
+		arg.CursorID,
 		arg.Limit,
 	)
 	if err != nil {
