@@ -49,7 +49,6 @@ SELECT COUNT(*) FROM payments
 WHERE household_id = $1 AND status = 'pending'
 `
 
-// Kritis untuk validasi Aturan Bisnis BR-01
 func (q *Queries) CountPendingPaymentsByHouseholdID(ctx context.Context, householdID pgtype.UUID) (int64, error) {
 	row := q.db.QueryRow(ctx, countPendingPaymentsByHouseholdID, householdID)
 	var count int64

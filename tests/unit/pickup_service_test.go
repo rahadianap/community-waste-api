@@ -20,11 +20,11 @@ func newTestUUID() (string, pgtype.UUID) {
 	return u.String(), pgU
 }
 
-// BR-01: Household cannot create new pickup if they have pending payment
+// Household cannot create new pickup if they have pending payment
 func TestPickupService_BR01_PendingPaymentCheck(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("BR-01 Fail: Should reject pickup creation when household has pending payments", func(t *testing.T) {
+	t.Run("Fail: Should reject pickup creation when household has pending payments", func(t *testing.T) {
 		mockStore := new(MockStore)
 		pickupSvc := service.NewPickupService(mockStore)
 
@@ -51,7 +51,7 @@ func TestPickupService_BR01_PendingPaymentCheck(t *testing.T) {
 		mockStore.AssertExpectations(t)
 	})
 
-	t.Run("BR-01 Success: Should allow pickup creation when household has 0 pending payments", func(t *testing.T) {
+	t.Run("Success: Should allow pickup creation when household has 0 pending payments", func(t *testing.T) {
 		mockStore := new(MockStore)
 		pickupSvc := service.NewPickupService(mockStore)
 
@@ -94,11 +94,11 @@ func TestPickupService_BR01_PendingPaymentCheck(t *testing.T) {
 	})
 }
 
-// BR-02: A pickup can only be scheduled if current status is pending
+// A pickup can only be scheduled if current status is pending
 func TestPickupService_BR02_OnlyPendingCanBeScheduled(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("BR-02 Fail: Reject scheduling when status is already scheduled", func(t *testing.T) {
+	t.Run("Fail: Reject scheduling when status is already scheduled", func(t *testing.T) {
 		mockStore := new(MockStore)
 		pickupSvc := service.NewPickupService(mockStore)
 
@@ -123,11 +123,11 @@ func TestPickupService_BR02_OnlyPendingCanBeScheduled(t *testing.T) {
 	})
 }
 
-// BR-03: Electronic type pickups cannot be scheduled unless safety_check is true
+// Electronic type pickups cannot be scheduled unless safety_check is true
 func TestPickupService_BR03_ElectronicSafetyCheck(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("BR-03 Fail: Reject scheduling electronic pickup when safety_check is false", func(t *testing.T) {
+	t.Run("Fail: Reject scheduling electronic pickup when safety_check is false", func(t *testing.T) {
 		mockStore := new(MockStore)
 		pickupSvc := service.NewPickupService(mockStore)
 
@@ -152,7 +152,7 @@ func TestPickupService_BR03_ElectronicSafetyCheck(t *testing.T) {
 		mockStore.AssertExpectations(t)
 	})
 
-	t.Run("BR-03 Success: Allow scheduling electronic pickup when safety_check is true", func(t *testing.T) {
+	t.Run("Success: Allow scheduling electronic pickup when safety_check is true", func(t *testing.T) {
 		mockStore := new(MockStore)
 		pickupSvc := service.NewPickupService(mockStore)
 
@@ -195,11 +195,11 @@ func TestPickupService_BR03_ElectronicSafetyCheck(t *testing.T) {
 	})
 }
 
-// BR-04: Once pickup is completed, automatically create payment (organic=50k, electronic=100k)
+// Once pickup is completed, automatically create payment (organic=50k, electronic=100k)
 func TestPickupService_BR04_AutoPaymentGenerationOnComplete(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("BR-04: Organic pickup generates payment with 50,000 amount", func(t *testing.T) {
+	t.Run("Organic pickup generates payment with 50,000 amount", func(t *testing.T) {
 		mockStore := new(MockStore)
 		pickupSvc := service.NewPickupService(mockStore)
 
@@ -248,7 +248,7 @@ func TestPickupService_BR04_AutoPaymentGenerationOnComplete(t *testing.T) {
 		mockStore.AssertExpectations(t)
 	})
 
-	t.Run("BR-04: Electronic pickup generates payment with 100,000 amount", func(t *testing.T) {
+	t.Run("Electronic pickup generates payment with 100,000 amount", func(t *testing.T) {
 		mockStore := new(MockStore)
 		pickupSvc := service.NewPickupService(mockStore)
 

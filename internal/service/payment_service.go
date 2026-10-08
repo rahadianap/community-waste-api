@@ -166,7 +166,6 @@ func (s *paymentService) List(ctx context.Context, statusStr, householdIDStr, st
 	return items, meta, nil
 }
 
-// Confirm enforces BR-05: payment confirmation requires a proof-of-payment upload.
 func (s *paymentService) Confirm(ctx context.Context, c *fiber.Ctx, id string, fileHeader *multipart.FileHeader) (*domain.PaymentResponse, error) {
 	paymentUUID, err := domain.StringToUUID(id)
 	if err != nil {

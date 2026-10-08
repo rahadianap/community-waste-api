@@ -26,7 +26,7 @@ func (m *MockUploader) UploadProof(c *fiber.Ctx, file *multipart.FileHeader) (st
 func TestPaymentService_BR05_PaymentConfirmation(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("BR-05 Fail: Reject confirm payment if already paid", func(t *testing.T) {
+	t.Run("Reject confirm payment if already paid", func(t *testing.T) {
 		mockStore := new(MockStore)
 		mockUploader := new(MockUploader)
 		paymentSvc := service.NewPaymentService(mockStore, mockUploader)
@@ -50,7 +50,7 @@ func TestPaymentService_BR05_PaymentConfirmation(t *testing.T) {
 		mockStore.AssertExpectations(t)
 	})
 
-	t.Run("BR-05 Success: Confirm payment with valid proof file", func(t *testing.T) {
+	t.Run("Success: Confirm payment with valid proof file", func(t *testing.T) {
 		mockStore := new(MockStore)
 		mockUploader := new(MockUploader)
 		paymentSvc := service.NewPaymentService(mockStore, mockUploader)

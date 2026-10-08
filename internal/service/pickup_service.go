@@ -26,7 +26,6 @@ func NewPickupService(store repository.Store) PickupService {
 	return &pickupService{store: store}
 }
 
-// Create enforces BR-01: household with pending payments cannot create a pickup.
 func (s *pickupService) Create(ctx context.Context, req domain.CreatePickupRequest) (*domain.PickupResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, invalidInput(err)
@@ -42,7 +41,6 @@ func (s *pickupService) Create(ctx context.Context, req domain.CreatePickupReque
 		return nil, lookup(err, domain.ErrHouseholdNotFound, "gagal mengambil data household")
 	}
 
-	// BR-01
 	pendingCount, err := s.store.CountPendingPaymentsByHouseholdID(ctx, householdUUID)
 	if err != nil {
 		return nil, wrap(err, "gagal menghitung data payment pending")
@@ -132,7 +130,6 @@ func (s *pickupService) List(ctx context.Context, statusStr, householdIDStr, cur
 	return items, meta, nil
 }
 
-// Schedule enforces BR-02 (only pending pickups) and BR-03 (electronic needs safety_check).
 func (s *pickupService) Schedule(ctx context.Context, id string, req domain.SchedulePickupRequest) (*domain.PickupResponse, error) {
 	pickupUUID, err := domain.StringToUUID(id)
 	if err != nil {
@@ -149,12 +146,10 @@ func (s *pickupService) Schedule(ctx context.Context, id string, req domain.Sche
 		return nil, lookup(err, domain.ErrPickupNotFound, "gagal mengambil data pickup")
 	}
 
-	// BR-02
 	if pickup.Status != db.PickupStatusPending {
 		return nil, domain.ErrPickupNotPending
 	}
 
-	// BR-03
 	if pickup.Type == db.WasteTypeElectronic && !pickup.SafetyCheck {
 		return nil, domain.ErrSafetyCheckRequired
 	}
@@ -174,7 +169,6 @@ func (s *pickupService) Schedule(ctx context.Context, id string, req domain.Sche
 	return &res, nil
 }
 
-// Complete enforces BR-04: completing a pickup auto-creates the payment (50k, electronic 100k) inside ExecTx.
 func (s *pickupService) Complete(ctx context.Context, id string) (*domain.PickupResponse, error) {
 	pickupUUID, err := domain.StringToUUID(id)
 	if err != nil {
@@ -193,7 +187,6 @@ func (s *pickupService) Complete(ctx context.Context, id string) (*domain.Pickup
 		return nil, domain.ErrPickupAlreadyCanceled
 	}
 
-	// BR-04 amount
 	var amount float64
 	if pickup.Type == db.WasteTypeElectronic {
 		amount = 100000.00

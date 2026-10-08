@@ -1,5 +1,4 @@
 -- name: CountPendingPaymentsByHouseholdID :one
--- Kritis untuk validasi Aturan Bisnis BR-01
 SELECT COUNT(*) FROM payments
 WHERE household_id = $1 AND status = 'pending';
 

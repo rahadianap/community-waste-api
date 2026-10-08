@@ -61,8 +61,8 @@ community-waste-api/
 
 ### Penjelasan Layer:
 1. **Handler Layer (`internal/handler/http`)**: Menerima request HTTP, memvalidasi input dasar, meneruskan payload ke service, dan mengembalikan HTTP status code & JSON response yang terstandarisasi.
-2. **Service Layer (`internal/service`)**: Pusat aturan bisnis. Bertanggung jawab memvalidasi alur operasional (BR-01 s/d BR-05) dan membungkus operasi multi-tabel ke dalam transaksi atomik database (`ExecTx`).
-3. **Repository Layer (`internal/repository` & `db/sqlc`)**: Menggunakan query type-safe yang digenerate oleh `sqlc` dengan `emit_interface: true` untuk abstraksi `Querier` dan `Store`. Mempermudah mocking tanpa dependensi ke DB riil saat unit testing.
+2. **Service Layer (`internal/service`)**: Pusat business rules.
+3. **Repository Layer (`internal/repository` & `db/sqlc`)**: Menggunakan query type-safe yang digenerate oleh `sqlc`.
 
 ---
 

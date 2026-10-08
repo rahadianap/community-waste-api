@@ -12,7 +12,6 @@ import (
 
 type Querier interface {
 	ConfirmPayment(ctx context.Context, arg ConfirmPaymentParams) (Payment, error)
-	// Kritis untuk validasi Aturan Bisnis BR-01
 	CountPendingPaymentsByHouseholdID(ctx context.Context, householdID pgtype.UUID) (int64, error)
 	CreateHousehold(ctx context.Context, arg CreateHouseholdParams) (Household, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
