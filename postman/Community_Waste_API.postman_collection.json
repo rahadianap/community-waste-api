@@ -1,0 +1,344 @@
+{
+  "info": {
+    "_postman_id": "a9103c94-community-waste-api",
+    "name": "Community Waste Collection API",
+    "description": "API Pengumpulan Sampah Komunitas untuk PT. Green Energi Utama.\nDibangun menggunakan Go, Fiber v2, PostgreSQL, dan sqlc.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "1. Households",
+      "item": [
+        {
+          "name": "Create Household",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.id) {",
+                  "    pm.environment.set('household_id', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owner_name\": \"Budi Santoso\",\n  \"address\": \"Jl. Merdeka No. 10, RT 01/RW 02\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/households",
+              "host": ["{{base_url}}"],
+              "path": ["api", "households"]
+            }
+          }
+        },
+        {
+          "name": "List Households (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/households?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "households"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Household Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/households/{{household_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "households", "{{household_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Household",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/households/{{household_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "households", "{{household_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Waste Pickups",
+      "item": [
+        {
+          "name": "Create Pickup (Organic)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.id) {",
+                  "    pm.environment.set('pickup_id', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"household_id\": \"{{household_id}}\",\n  \"type\": \"organic\",\n  \"safety_check\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/pickups",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pickups"]
+            }
+          }
+        },
+        {
+          "name": "Create Pickup (Electronic - with Safety Check)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"household_id\": \"{{household_id}}\",\n  \"type\": \"electronic\",\n  \"safety_check\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/pickups",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pickups"]
+            }
+          }
+        },
+        {
+          "name": "List Pickups (Filtered)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pickups?status=pending&page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pickups"],
+              "query": [
+                { "key": "status", "value": "pending" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Pickup Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pickups/{{pickup_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pickups", "{{pickup_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Schedule Pickup (BR-02 & BR-03)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_date\": \"2026-10-15T09:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/pickups/{{pickup_id}}/schedule",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pickups", "{{pickup_id}}", "schedule"]
+            }
+          }
+        },
+        {
+          "name": "Complete Pickup (Auto Payment - BR-04)",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pickups/{{pickup_id}}/complete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pickups", "{{pickup_id}}", "complete"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Pickup",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pickups/{{pickup_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pickups", "{{pickup_id}}", "cancel"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Payments",
+      "item": [
+        {
+          "name": "Create Manual Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.id) {",
+                  "    pm.environment.set('payment_id', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"household_id\": \"{{household_id}}\",\n  \"waste_id\": \"{{pickup_id}}\",\n  \"amount\": 50000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments"]
+            }
+          }
+        },
+        {
+          "name": "List Payments (Filter & Date Range)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/payments?status=pending&start_date=2026-10-01&end_date=2026-10-31&page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments"],
+              "query": [
+                { "key": "status", "value": "pending" },
+                { "key": "start_date", "value": "2026-10-01" },
+                { "key": "end_date", "value": "2026-10-31" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/payments/{{payment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments", "{{payment_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Confirm Payment with Proof (BR-05)",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "proof_file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments/{{payment_id}}/confirm",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments", "{{payment_id}}", "confirm"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Reports",
+      "item": [
+        {
+          "name": "Waste Summary Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/reports/waste-summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "reports", "waste-summary"]
+            }
+          }
+        },
+        {
+          "name": "Payment Summary Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/reports/payment-summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "reports", "payment-summary"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
